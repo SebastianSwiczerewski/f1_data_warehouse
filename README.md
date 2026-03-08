@@ -207,6 +207,12 @@ docker compose down -v
 
   This command is the **core entry point** of the project. It provisions infrastructure, ingests data, and builds analytics models, starts the BI layer, and restores dashboards - fully automated and end-to-end.
 
+  The system is ready once the terminal displays:
+
+  ```bash
+  🚀 F1 DATA WAREHOUSE IS READY 🚀
+  ```
+
 Under the hood, it performs the following steps:
 
 1. **Provision the Warehouse**
@@ -251,6 +257,13 @@ Once the pipeline completes, open in a web browser:
 http://localhost:3000
 ```
 The Metabase instance is automatically provisioned and restored from a version-controlled seed file, ensuring identical dashboards across environments without any manual configuration.
+
+Login with
+
+```bash
+Email: f1@metabase.com  
+Password: Alonso1
+```
 
 Navigate to:
 
