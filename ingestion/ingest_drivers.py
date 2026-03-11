@@ -1,4 +1,4 @@
-from ingestion.db import connect_db
+from config.database import get_db_cursor
 from ingestion.api import fetch_paginated
 from ingestion.logger import setup_logger
 
@@ -50,8 +50,7 @@ def insert_drivers(cur, drivers):
 def main():
     logger.info("Starting drivers ingestion")
 
-    conn = connect_db()
-    cur = conn.cursor()
+    conn, cur = get_db_cursor()
 
     try:
         drivers = fetch_all_drivers()
