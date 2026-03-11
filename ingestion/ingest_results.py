@@ -3,12 +3,10 @@ import time
 import json
 import sys
 from pathlib import Path
-from ingestion.db import connect_db
+
+from config.database import get_db_cursor
 from ingestion.api import fetch_paginated, RateLimitExceeded
 from ingestion.logger import setup_logger
-from dotenv import load_dotenv
-
-load_dotenv("docker/.env")
 
 logger = setup_logger("ingest_results")
 
@@ -76,6 +74,8 @@ def main():
 
     PROGRESS_FILE = Path("/app/ingestion/logs/ingestion_progress.json")
 
+    conn, cur = get_db_cursor()
+
     def publish_progress(
         season_index,
         total_seasons,
@@ -104,9 +104,6 @@ def main():
             data["sleep_seconds"] = sleep_seconds
 
         PROGRESS_FILE.write_text(json.dumps(data))
-
-    conn = connect_db()
-    cur = conn.cursor()
 
     try:
         create_table(cur)
