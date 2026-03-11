@@ -28,4 +28,4 @@ docker compose \
 # temporarly removed for development> /dev/null 2>&1
 
 echo "Launching dashboard..."
-python cli/pipeline_cli.py
+python -m cli.pipeline_cli
