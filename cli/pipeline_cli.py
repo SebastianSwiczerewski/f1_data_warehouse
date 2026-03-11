@@ -1,42 +1,20 @@
+import os
 import time
 import subprocess
-import psycopg2
 import json 
 import shutil
 from pathlib import Path
+
 from rich.live import Live
 from rich.table import Table
 from rich.console import Console
 from rich.spinner import Spinner
 from rich.progress import Progress, BarColumn, TextColumn
 from rich.panel import Panel
-from dotenv import load_dotenv
-import os
+
+from config.database import get_db_cursor
 
 console = Console()
-
-load_dotenv()
-
-EXPECTED_RESULTS = 26000  # adjust later
-
-
-# -----------------------------
-# Database Helper
-# -----------------------------
-
-def get_db_connection():
-    host = os.getenv("POSTGRES_HOST", "localhost")
-
-    if host == "postgres":
-        host = "localhost"
-
-    return psycopg2.connect(
-        host=host,
-        port=os.getenv("POSTGRES_PORT"),
-        dbname=os.getenv("POSTGRES_DB"),
-        user=os.getenv("POSTGRES_USER"),
-        password=os.getenv("POSTGRES_PASSWORD"),
-    )
 
 # -----------------------------
 # Docker Helpers
@@ -65,8 +43,7 @@ def docker_health(container):
     
 def get_pipeline_stats():
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
+        conn, cur = get_db_cursor()
 
         cur.execute("SELECT COUNT(*) FROM drivers_raw;")
         drivers = cur.fetchone()[0]
@@ -93,7 +70,6 @@ def get_pipeline_stats():
 
 def render_pipeline_summary(start_time):
 
-    progress = get_ingestion_progress()
     drivers, constructors, races, results, seasons = get_pipeline_stats()
 
     runtime = format_runtime(time.time() - start_time)
@@ -103,8 +79,8 @@ def render_pipeline_summary(start_time):
     races = races or 0
     results = results or 0
     seasons = seasons or "?"
-    laps = int(results * 57)
-    distance = int(laps * 5.3)
+    laps = int(results * 60)
+    distance = int(laps * 5)
 
     table = Table(expand=True)
 
@@ -150,8 +126,8 @@ def get_ingestion_progress():
 
 def get_results_count():
     try:
-        conn = get_db_connection()
-        cur = conn.cursor()
+        conn, cur = get_db_cursor()
+
         cur.execute("SELECT COUNT(*) FROM results_raw;")
         count = cur.fetchone()[0]
         conn.close()
