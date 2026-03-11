@@ -30,6 +30,7 @@ services:
     environment:
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
+      RUNNING_IN_DOCKER: "true"
     volumes:
       - ../ingestion/logs:/app/ingestion/logs
       - ingestion_state:/tmp
@@ -42,6 +43,8 @@ services:
     container_name: f1_dbt
     depends_on:
       - postgres
+    environment:
+      RUNNING_IN_DOCKER: "true"
     env_file:
       - ../.env
     volumes:
