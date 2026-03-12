@@ -7,10 +7,12 @@ from pathlib import Path
 
 from rich.live import Live
 from rich.table import Table
-from rich.console import Console
+from rich.console import Console, Group
 from rich.spinner import Spinner
 from rich.progress import Progress, BarColumn, TextColumn
 from rich.panel import Panel
+from rich.text import Text
+from rich.columns import Columns
 
 from config.database import get_db_cursor
 
@@ -79,30 +81,35 @@ def render_pipeline_summary(start_time):
     races = races or 0
     results = results or 0
     seasons = seasons or "?"
+
     laps = int(results * 60)
     distance = int(laps * 5)
 
-    table = Table(expand=True)
+    # formatted soft panel content
+    summary = f"""
+    [cyan]Seasons processed[/cyan]      {seasons:>12}
+    [cyan]Grand Prix races[/cyan]       {races:>12,}
+    [cyan]Driver results[/cyan]         {results:>12,}
 
-    table.add_column("Metric", style="cyan")
-    table.add_column("Value", justify="right")
+    [cyan]Drivers ingested[/cyan]       {drivers:>12,}
+    [cyan]Constructors[/cyan]           {constructors:>12,}
 
-    table.add_row("Seasons processed", f"{seasons}")
-    table.add_row("Grand Prix races", f"{races:,}")
-    table.add_row("Driver results", f"{results:,}")
-    table.add_row("Drivers ingested", f"{drivers:,}")
-    table.add_row("Constructors", f"{constructors:,}")
-    table.add_row("Laps estimated", f"~{laps:,}")
-    table.add_row("Distance covered", f"~{distance:,} km")
-    table.add_row("Total runtime", runtime)
+    [dim]────────────────────────────────────────[/dim]
+
+    [cyan]Laps estimated[/cyan]         {"~"+format(laps, ","):>12}
+    [cyan]Distance covered[/cyan]       {"~"+format(distance, ",")+" km":>12}
+
+    [bold cyan]Total runtime[/bold cyan]        {runtime:>12}
+    """
 
     terminal_width = shutil.get_terminal_size().columns
 
     panel = Panel(
-        table,
+        summary.strip(),
         title="🏁 F1 Pipeline Summary",
         border_style="bright_blue",
-        width=min(terminal_width - 2, 120)
+        width=min(terminal_width - 2, 120),
+        padding=(1, 4)
     )
 
     console.print(panel)
@@ -152,47 +159,51 @@ def format_runtime(seconds):
 
 def render_dashboard(start_time):
 
-    table = Table(expand=True)
-    table.add_column("Step", justify="left")
-    table.add_column("Status", justify="left")
+    grid = Table.grid(expand=True)
+    grid.add_column(justify="left")
+    grid.add_column(justify="right")
 
-    # postgreSQL
+    # ---------------- PostgreSQL ----------------
     pg_health = docker_health("f1_postgres")
 
     if pg_health == "healthy":
-        pg_status = "[green]✓ Healthy[/green]"
+        pg_status = Text("✓ Healthy", style="green")
     else:
-        pg_status = Spinner("dots", text="[yellow]Starting...[/yellow]")
+        pg_status = Spinner("dots", text="Starting...", style="yellow")
 
-    table.add_row("[1/5] PostgreSQL", pg_status)
+    grid.add_row("[1/5] PostgreSQL", pg_status)
+    grid.add_row("", "")
 
-    # ingestion 
+    # ---------------- Ingestion ----------------
     progress_data = get_ingestion_progress()
     ingest_state = docker_state("f1_ingestion")
 
     if ingest_state == "exited":
+
         exit_code = docker_exit_code("f1_ingestion")
 
         if exit_code == "0":
-            ingest_status = "[green]✓ Completed[/green]"
+            ingest_status = Text("✓ Completed", style="green")
         elif exit_code == "2":
-            ingest_status = "[red]❌ Failed (API limit)[/red]"
+            ingest_status = Text("API limit", style="red")
         else:
-            ingest_status = "[red]❌ Failed[/red]"
+            ingest_status = Text("Failed", style="red")
 
-        table.add_row("[2/5] Ingestion", ingest_status)
+        grid.add_row("[2/5] Ingestion", ingest_status)
 
     elif progress_data:
 
         stage = progress_data.get("stage")
 
         if stage != "results":
-            table.add_row(
+
+            grid.add_row(
                 "[2/5] Ingestion",
-                Spinner("dots", text=f"[yellow]{stage.capitalize()}...[/yellow]")
+                Spinner("dots", text=f"{stage.capitalize()}...", style="yellow")
             )
 
         else:
+
             season = progress_data.get("season_index", 0)
             total_seasons = progress_data.get("total_seasons", 1)
             total_inserted = progress_data.get("total_inserted", 0)
@@ -201,95 +212,104 @@ def render_dashboard(start_time):
             ratio = season / total_seasons
             percent = int(ratio * 100)
 
+            # Progress bar
             progress_bar = Progress(
-                TextColumn("[bold yellow]🏁 Historical Results"),
-                BarColumn(
-                    bar_width=55,
-                    complete_style="bright_magenta",
-                    finished_style="bright_magenta",
-                    pulse_style="bright_magenta",
-                ),
-                TextColumn("[cyan]{task.percentage:>3.0f}%"),
-                expand=True,
+                BarColumn(bar_width=32, complete_style="magenta"),
+                expand=False,
             )
+            progress_bar.add_task("results", total=100, completed=percent)
 
-            task = progress_bar.add_task(
-                description="results",
-                total=100,
-                completed=percent,
+            # Right side layout (bar + %)
+            progress_layout = Group(
+                progress_bar,
+                Text(f"{percent}%", style="white", justify="right")
             )
+            # Step
+            grid.add_row("[2/5] Ingestion", "")
+            grid.add_row("", "")
 
-            table.add_row("[2/5] Ingestion", progress_bar)
+            # Historical Results line
+            grid.add_row("Historical Results", progress_layout)
+
+            grid.add_row("", "")
 
             estimated_laps = progress_data.get("estimated_laps", 0)
             estimated_distance = progress_data.get("estimated_distance_km", 0)
 
-            details = (
-                f"Season:            {season} / {total_seasons}\n"
-                f"Driver Results:    {total_inserted:,}\n"
-                f"Laps:             ~{estimated_laps:,}\n"
-                f"Distance:         ~{estimated_distance:,} km\n"
-            )
+            grid.add_row("", Text(f"Season: {season} / {total_seasons}", style="white"))
+            grid.add_row("", Text(f"Driver Results: {total_inserted:,}", style="white"))
+            grid.add_row("", Text(f"Laps: ~{estimated_laps:,}", style="white"))
+            grid.add_row("", Text(f"Distance: ~{estimated_distance:,} km", style="white"))
 
+            # API cooldown
             if status == "cooldown":
-                retry = progress_data.get("retry")
-                sleep = progress_data.get("sleep_seconds")
-                details += "[red]⚠ API rate limit reached[/red]\n"
-                details += f"[red]Cooling down {sleep}s[/red]"
 
-            table.add_row("", details)
+                sleep = progress_data.get("sleep_seconds", 0)
+
+                grid.add_row("", "")
+                grid.add_row("", Text("⚠ API rate limit reached", style="red"))
+                grid.add_row("", Text(f"Cooling down {sleep}s", style="red"))
 
     else:
-        table.add_row(
+
+        grid.add_row(
             "[2/5] Ingestion",
-            Spinner("dots", text="[yellow]Pending...[/yellow]")
+            Spinner("dots", text="Pending...", style="yellow")
         )
-    # dbt 
+
+    grid.add_row("", "")
+
+    # ---------------- dbt ----------------
     dbt_state = docker_state("f1_dbt")
     ingestion_state = docker_state("f1_ingestion")
 
     if dbt_state == "exited":
-        dbt_status = "[green]✓ Completed[/green]"
-
+        dbt_status = Text("✓ Completed", style="green")
     elif dbt_state == "running" and ingestion_state != "exited":
-        dbt_status = Spinner("dots", text="[yellow]Pending...[/yellow]")
-
+        dbt_status = Spinner("dots", text="Pending...", style="yellow")
     elif dbt_state == "running" and ingestion_state == "exited":
-        dbt_status = Spinner("dots", text="[yellow]Running models...[/yellow]")
-
+        dbt_status = Spinner("dots", text="Running models...", style="yellow")
     else:
-        dbt_status = Spinner("dots", text="[yellow]Pending...[/yellow]")
+        dbt_status = Spinner("dots", text="Pending...", style="yellow")
 
-    table.add_row("[3/5] dbt Models", dbt_status)
+    grid.add_row("[3/5] dbt Models", dbt_status)
+    grid.add_row("", "")
 
-    # metabase restore 
+    # ---------------- Metabase Restore ----------------
     restore_state = docker_state("f1_metabase_restore")
 
     if restore_state == "exited":
-        restore_status = "[green]✓ Completed[/green]"
+        restore_status = Text("✓ Completed", style="green")
     elif restore_state == "running":
-        restore_status = Spinner("dots", text="[yellow]Restoring...[/yellow]")
+        restore_status = Spinner("dots", text="Restoring...", style="yellow")
     else:
-        restore_status = Spinner("dots", text="[yellow]Pending...[/yellow]")
+        restore_status = Spinner("dots", text="Pending...", style="yellow")
 
-    table.add_row("[4/5] Metabase Restore", restore_status)
+    grid.add_row("[4/5] Metabase Restore", restore_status)
+    grid.add_row("", "")
 
-    # dashboard 
+    # ---------------- Dashboard ----------------
     meta_health = docker_health("f1_metabase")
 
     if meta_health == "healthy":
-        meta_status = "[green]✓ Healthy[/green]"
+        meta_status = Text("✓ Healthy", style="green")
     else:
-        meta_status = Spinner("dots", text="[yellow]Starting...[/yellow]")
+        meta_status = Spinner("dots", text="Starting...", style="yellow")
 
-    table.add_row("[5/5] Dashboard", meta_status)
+    grid.add_row("[5/5] Dashboard", meta_status)
+    grid.add_row("", "")
 
-    # elapsed time 
+    # ---------------- Elapsed Time ----------------
     elapsed = format_runtime(time.time() - start_time)
-    table.add_row("[bold]Elapsed Time[/bold]", f"[cyan]{elapsed}[/cyan]")
 
-    return Panel(table, title="🚀 F1 Data Warehouse Pipeline", border_style="bright_blue")
+    grid.add_row(Text("Elapsed Time", style="cyan"), Text(elapsed, style="cyan"))
 
+    return Panel(
+        grid,
+        title="🚀 F1 Data Warehouse Pipeline",
+        border_style="bright_blue",
+        padding=(1, 4),
+    )
 
 
 def docker_exit_code(container):
