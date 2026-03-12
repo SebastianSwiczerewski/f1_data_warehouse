@@ -1,4 +1,4 @@
-import os
+import sys
 import time
 import subprocess
 import json 
@@ -7,20 +7,16 @@ from pathlib import Path
 
 from rich.live import Live
 from rich.table import Table
-from rich.console import Console, Group
+from rich.console import Console
 from rich.spinner import Spinner
 from rich.progress import Progress, BarColumn, TextColumn
 from rich.panel import Panel
 from rich.text import Text
-from rich.columns import Columns
+from rich.align import Align
 
 from config.database import get_db_cursor
 
 console = Console()
-
-# -----------------------------
-# Docker Helpers
-# -----------------------------
 
 def docker_state(container):
     try:
@@ -80,36 +76,40 @@ def render_pipeline_summary(start_time):
     constructors = constructors or 0
     races = races or 0
     results = results or 0
-    seasons = seasons or "?"
+    seasons = seasons or 0
 
     laps = int(results * 60)
     distance = int(laps * 5)
 
-    # formatted soft panel content
-    summary = f"""
-    [cyan]Seasons processed[/cyan]      {seasons:>12}
-    [cyan]Grand Prix races[/cyan]       {races:>12,}
-    [cyan]Driver results[/cyan]         {results:>12,}
+    grid = Table.grid(expand=True)
+    grid.add_column(width=2)  
+    grid.add_column(justify="left")
+    grid.add_column(justify="right")
 
-    [cyan]Drivers ingested[/cyan]       {drivers:>12,}
-    [cyan]Constructors[/cyan]           {constructors:>12,}
+    grid.add_row("🏁", Text("Seasons processed", style="cyan"), f"{seasons}")
+    grid.add_row("🏎", Text("Grand Prix races", style="cyan"), f"{races:,}")
+    grid.add_row("📊", Text("Driver results", style="cyan"), f"{results:,}")
 
-    [dim]────────────────────────────────────────[/dim]
+    grid.add_row("", "", "")
 
-    [cyan]Laps estimated[/cyan]         {"~"+format(laps, ","):>12}
-    [cyan]Distance covered[/cyan]       {"~"+format(distance, ",")+" km":>12}
+    grid.add_row("😎", Text("Drivers ingested", style="cyan"), f"{drivers:,}")
+    grid.add_row("🏭", Text("Constructors", style="cyan"), f"{constructors:,}")
 
-    [bold cyan]Total runtime[/bold cyan]        {runtime:>12}
-    """
+    grid.add_row("", "", "")
 
-    terminal_width = shutil.get_terminal_size().columns
+    grid.add_row("🔁", Text("Laps estimated", style="cyan"), f"~{laps:,}")
+    grid.add_row("📏", Text("Distance covered", style="cyan"), f"~{distance:,} km")
+
+    grid.add_row("", "", "")
+
+    grid.add_row("🧭", Text("Pipeline runtime", style="bold cyan"), Text(runtime, style="bold cyan"))
 
     panel = Panel(
-        summary.strip(),
+        grid,
         title="🏁 F1 Pipeline Summary",
         border_style="bright_blue",
-        width=min(terminal_width - 2, 120),
-        padding=(1, 4)
+        padding=(1, 4),
+        width=min(shutil.get_terminal_size().columns - 4, 70),
     )
 
     console.print(panel)
@@ -117,9 +117,7 @@ def render_pipeline_summary(start_time):
     console.print("\n[bold cyan]📊 Dashboard available at:[/bold cyan]")
     console.print("[blue]http://localhost:3000[/blue]\n")
 
-# -----------------------------
-# DB Polling (Live Ingestion %)
-# -----------------------------
+# Database pooling
 
 def get_ingestion_progress():
     path = Path("ingestion/logs/ingestion_progress.json")
@@ -130,17 +128,6 @@ def get_ingestion_progress():
     except:
         return None
     
-
-def get_results_count():
-    try:
-        conn, cur = get_db_cursor()
-
-        cur.execute("SELECT COUNT(*) FROM results_raw;")
-        count = cur.fetchone()[0]
-        conn.close()
-        return count
-    except:
-        return 0
     
 def format_runtime(seconds):
     minutes, sec = divmod(int(seconds), 60)
@@ -153,9 +140,7 @@ def format_runtime(seconds):
     else:
         return f"{sec}s"
 
-# -----------------------------
-# Dashboard Renderer
-# -----------------------------
+# Dashboard 
 
 def render_dashboard(start_time):
 
@@ -163,7 +148,7 @@ def render_dashboard(start_time):
     grid.add_column(justify="left")
     grid.add_column(justify="right")
 
-    # ---------------- PostgreSQL ----------------
+    # postgres
     pg_health = docker_health("f1_postgres")
 
     if pg_health == "healthy":
@@ -171,10 +156,10 @@ def render_dashboard(start_time):
     else:
         pg_status = Spinner("dots", text="Starting...", style="yellow")
 
-    grid.add_row("[1/5] PostgreSQL", pg_status)
+    grid.add_row("[dim]\\[1/5][/dim] PostgreSQL", pg_status)
     grid.add_row("", "")
 
-    # ---------------- Ingestion ----------------
+    # ingestion
     progress_data = get_ingestion_progress()
     ingest_state = docker_state("f1_ingestion")
 
@@ -189,7 +174,7 @@ def render_dashboard(start_time):
         else:
             ingest_status = Text("Failed", style="red")
 
-        grid.add_row("[2/5] Ingestion", ingest_status)
+        grid.add_row("[dim]\\[2/5][/dim] Ingestion", ingest_status)
 
     elif progress_data:
 
@@ -198,7 +183,7 @@ def render_dashboard(start_time):
         if stage != "results":
 
             grid.add_row(
-                "[2/5] Ingestion",
+                "[dim]\\[2/5][/dim] Ingestion",
                 Spinner("dots", text=f"{stage.capitalize()}...", style="yellow")
             )
 
@@ -212,23 +197,18 @@ def render_dashboard(start_time):
             ratio = season / total_seasons
             percent = int(ratio * 100)
 
-            # Progress bar
             progress_bar = Progress(
-                BarColumn(bar_width=32, complete_style="magenta"),
+                BarColumn(bar_width=32, complete_style="magenta", finished_style="green"),
+                TextColumn("{task.percentage:>3.0f}%", style="bold white"),
                 expand=False,
             )
             progress_bar.add_task("results", total=100, completed=percent)
 
-            # Right side layout (bar + %)
-            progress_layout = Group(
-                progress_bar,
-                Text(f"{percent}%", style="white", justify="right")
-            )
-            # Step
-            grid.add_row("[2/5] Ingestion", "")
+            progress_layout = Align.right(progress_bar)
+        
+            grid.add_row("[dim]\\[2/5][/dim] Ingestion", "")
             grid.add_row("", "")
 
-            # Historical Results line
             grid.add_row("Historical Results", progress_layout)
 
             grid.add_row("", "")
@@ -236,10 +216,15 @@ def render_dashboard(start_time):
             estimated_laps = progress_data.get("estimated_laps", 0)
             estimated_distance = progress_data.get("estimated_distance_km", 0)
 
-            grid.add_row("", Text(f"Season: {season} / {total_seasons}", style="white"))
-            grid.add_row("", Text(f"Driver Results: {total_inserted:,}", style="white"))
-            grid.add_row("", Text(f"Laps: ~{estimated_laps:,}", style="white"))
-            grid.add_row("", Text(f"Distance: ~{estimated_distance:,} km", style="white"))
+            stats_grid = Table.grid()
+            stats_grid.add_column(style="dim", min_width=16)
+            stats_grid.add_column(justify="right", min_width=14)
+            stats_grid.add_row("Season", f"{season} / {total_seasons}")
+            stats_grid.add_row("Driver Results", f"{total_inserted:,}")
+            stats_grid.add_row("Laps", f"~{estimated_laps:,}")
+            stats_grid.add_row("Distance", f"~{estimated_distance:,} km")
+
+            grid.add_row("", Align.right(stats_grid))
 
             # API cooldown
             if status == "cooldown":
@@ -247,19 +232,18 @@ def render_dashboard(start_time):
                 sleep = progress_data.get("sleep_seconds", 0)
 
                 grid.add_row("", "")
-                grid.add_row("", Text("⚠ API rate limit reached", style="red"))
-                grid.add_row("", Text(f"Cooling down {sleep}s", style="red"))
+                grid.add_row("", Spinner("dots", text=f"API rate limit — cooling down {sleep}s", style="red"))
 
     else:
 
         grid.add_row(
-            "[2/5] Ingestion",
+            "[dim]\\[2/5][/dim] Ingestion",
             Spinner("dots", text="Pending...", style="yellow")
         )
 
     grid.add_row("", "")
 
-    # ---------------- dbt ----------------
+    # dbt
     dbt_state = docker_state("f1_dbt")
     ingestion_state = docker_state("f1_ingestion")
 
@@ -272,10 +256,10 @@ def render_dashboard(start_time):
     else:
         dbt_status = Spinner("dots", text="Pending...", style="yellow")
 
-    grid.add_row("[3/5] dbt Models", dbt_status)
+    grid.add_row("[dim]\\[3/5][/dim] dbt Models", dbt_status)
     grid.add_row("", "")
 
-    # ---------------- Metabase Restore ----------------
+    # metabase restore
     restore_state = docker_state("f1_metabase_restore")
 
     if restore_state == "exited":
@@ -285,10 +269,10 @@ def render_dashboard(start_time):
     else:
         restore_status = Spinner("dots", text="Pending...", style="yellow")
 
-    grid.add_row("[4/5] Metabase Restore", restore_status)
+    grid.add_row("[dim]\\[4/5][/dim] Metabase Restore", restore_status)
     grid.add_row("", "")
 
-    # ---------------- Dashboard ----------------
+    # metabase
     meta_health = docker_health("f1_metabase")
 
     if meta_health == "healthy":
@@ -296,12 +280,13 @@ def render_dashboard(start_time):
     else:
         meta_status = Spinner("dots", text="Starting...", style="yellow")
 
-    grid.add_row("[5/5] Dashboard", meta_status)
+    grid.add_row("[dim]\\[5/5][/dim] Dashboard", meta_status)
     grid.add_row("", "")
 
-    # ---------------- Elapsed Time ----------------
+    # runtime
     elapsed = format_runtime(time.time() - start_time)
 
+    grid.add_row("[dim]─────────────────────[/dim]", "[dim]─────────────[/dim]")
     grid.add_row(Text("Elapsed Time", style="cyan"), Text(elapsed, style="cyan"))
 
     return Panel(
@@ -310,6 +295,7 @@ def render_dashboard(start_time):
         border_style="bright_blue",
         padding=(1, 4),
     )
+
 
 
 def docker_exit_code(container):
@@ -323,6 +309,12 @@ def docker_exit_code(container):
 
 
 def main():
+
+    # CLI flag
+    if "--summary" in sys.argv:
+        render_pipeline_summary(time.time())
+        return
+
     start_time = time.time()
 
     with Live(render_dashboard(start_time), refresh_per_second=4) as live:
@@ -401,6 +393,7 @@ def main():
         and metabase_state == "running"
     ):
         console.print("\n[bold green]✅ Pipeline completed successfully.[/bold green]")
+        console.print()
         render_pipeline_summary(start_time)
 
     # fail

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -e
-set -x
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 clear
-echo "🚀 Starting F1 Data Warehouse..."
-
+echo ""
+echo "🚀 Starting F1 Data Warehouse"
+echo ""
 
 # .env exists
 if [ ! -f "$PROJECT_DIR/.env" ]; then
@@ -18,14 +18,17 @@ echo "Building images..."
 docker compose \
   --env-file "$PROJECT_DIR/.env" \
   -f "$PROJECT_DIR/docker/docker-compose.yml" \
-  build 
+  build > /dev/null 2>&1
 
 echo "Starting containers..."
 docker compose \
   --env-file "$PROJECT_DIR/.env" \
   -f "$PROJECT_DIR/docker/docker-compose.yml" \
-  up -d 
-# temporarly removed for development> /dev/null 2>&1
+  up -d > /dev/null 2>&1
 
 echo "Launching dashboard..."
+
+sleep 1
+
+clear
 python -m cli.pipeline_cli
