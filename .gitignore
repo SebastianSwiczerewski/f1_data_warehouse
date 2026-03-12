@@ -7,6 +7,9 @@ dbt_packages/
 logs/*
 .user.yml
 
+# pipeline runtime logs
+ingestion/logs/
+
 **/.DS_Store
 
 # Byte-compiled / optimized / DLL files
