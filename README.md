@@ -1,19 +1,201 @@
 # 🏎️ Formula 1 Data Warehouse
 
-An end-to-end data engineering project that ingests, models, and transforms historical Formula 1 data into an analytics-ready warehouse.
+An **end-to-end Data Engineering project** that builds an analytics-ready data warehouse for Formula 1 race data.
 
-The project demonstrates modern data engineering and analytics engineering best practices, including robust ingestion, layered transformations, data quality testing, and star-schema modeling.
+The project ingests data from an external API, loads it into PostgreSQL, transforms it using dbt, and exposes analytics through Metabase dashboards.
+
+This project was built as part of my **Cloud Data Engineer portfolio**, focusing on realistic data engineering practices such as:
+- containerized infrastructure
+- modular pipelines
+- transformation layers
+- analytics-ready marts
+- automated orchestration
+
+The result is a fully reproducible pipeline that turns raw API data into meaningful racing insights.
+
+
+## 🏁 What This Project Does
+This pipeline takes raw Formula 1 data and transforms it into a queryable analytics warehouse.
+
+The workflow looks like this:
+```bash
+F1 API  
+↓  
+Python Ingestion Service  
+↓  
+PostgreSQL Data Warehouse (raw layer)  
+↓  
+dbt Transformations (staging → marts)  
+↓  
+Analytics Models  
+↓  
+Metabase Dashboards
+```
+The pipeline is fully containerized and runs locally using Docker Compose, making it easy to reproduce the full data stack.
+
+## 📊 Example Analytics
+The warehouse powers multiple dashboards built in Metabase.
+
+Examples include:
+- Driver performance comparisons
+- Constructor standings trends
+- Race results analysis
+- Season statistics
+
+### F1 Driver Season Performance Analysis 
+
+<p align="center">
+  <img src="docs/metabase_f1_championship_battle.png">
+  <br>
+  <em>Who's leading, who's chasing, and how the title fight unfolds round by round.</em>
+</p>
 
 ---
 
-## Overview
-This warehouse enables analysis of Formula 1 history such as:
-- Driver career performance
-- Constructor dominance by season
-- Race and calendar analytics
+### F1 Long-Term Insights: Dynasties & Stability Analysis
 
-The pipeline is designed to be **idempotent, resumable, and analytics-ready**, closely mirroring real-world production patterns.
+<p align="center">
+  <img src="docs/metabase_f1_dynasties.png">
+  <br>
+  <em>Not all dynsaties are built the same. Some are explosive. Others are engineered.</em>
+</p>
 
+---
+
+### F1 Long-Term Insights: Era Competitiveness & Balance Analysis
+
+<p align="center">
+  <img src="docs/metabase_f1_era_competitiveness.png">
+  <br>
+  <em>Runaways or razor-thin battles? Some seasons were decided early. Others came to the final corner.</em>
+</p>
+
+---
+
+### Pipeline CLI Dashboard
+
+You can also monitor the pipeline directly from the CLI dashboard:
+
+<p align="center">
+  <img src="docs/cli_pipeline_dashboard.png">
+  <br>
+  <em>Terminal dashboard for monitoring pipeline execution.</em>
+</p>
+
+---
+
+### Pipeline Summary CLI Dashboard
+
+<p align="center">
+  <img src="docs/cli_summary_dashboard.png">
+  <br>
+  <em>Terminal dashboard for pipeline summary.</em>
+</p>
+
+---
+
+The goal of this project is not only to analyze F1 data but also to demonstrate how a **modern data stack can be built from scratch.**
+
+
+## ⚙️ Tech Stack
+
+This project uses tools commonly found in modern data engineering environments.
+
+| Layer | Tool | Description |
+|------|------|-------------|
+| Containerization | Docker Compose | Orchestrates the entire data stack locally |
+| Data Ingestion | Python | Collects Formula 1 race data from external API |
+| Data Warehouse | PostgreSQL | Stores raw and transformed datasets |
+| Transformations | dbt | Builds structured staging and mart models |
+| Data Modeling | dbt | Fact and dimension tables for analytics |
+| BI / Analytics | Metabase | Interactive dashboards and visualizations |
+| Pipeline Monitoring | Python CLI Dashboard | Real-time pipeline monitoring |
+| Configuration | Environment Variables (.env) | Secure configuration management |
+
+
+## 🏗️ Architecture
+
+The pipeline is organized into three main stages.
+
+### 1️⃣ Ingestion
+
+A Python ingestion pipeline fetches Formula 1 data from the API and loads it into raw PostgreSQL tables.
+
+The ingestion service runs inside a Docker container and writes logs and progress state for monitoring.
+### 2️⃣ Storage
+
+PostgreSQL acts as the central warehouse storing both raw ingestion tables and transformed analytics models.
+
+### 3️⃣ Transformation
+
+Data is transformed using dbt into two layers:
+
+**Staging models**
+- clean raw API data
+- standardize formats
+- create consistent schemas
+
+**Mart models**
+- fact tables
+- dimension tables
+- analytics-ready datasets
+
+Example dbt configuration:
+- staging models materialized as views
+- marts materialized as tables 
+
+### 4️⃣Analytics
+
+Transformed datasets are exposed through **Metabase dashboards**, allowing interactive exploration of driver, race, and constructor performance.
+
+
+## 🏗️ Data Pipeline Architecture
+
+        +-------------+
+        |   F1 API    |
+        +-------------+
+               |
+               v
+     +-------------------+
+     | Python Ingestion  |
+     +-------------------+
+               |
+               v
+       +---------------+
+       |   PostgreSQL  |
+       |     (Raw)     |
+       +---------------+
+               |
+               v
+        +-------------+
+        |     dbt     |
+        | staging     |
+        | marts       |
+        +-------------+
+               |
+               v
+        +-------------+
+        |  Metabase   |
+        | Dashboards  |
+        +-------------+
+        
+
+## 🐳 Infrastructure
+
+The entire stack runs locally using **Docker Compose**.
+
+Containers include:
+- PostgreSQL database
+- ingestion pipeline
+- dbt transformation environment
+
+The dbt container waits until ingestion finishes before running transformations.
+
+This ensures the pipeline runs in the correct order:
+
+```bash
+ingestion → dbt staging → dbt marts → dbt tests
+```
 ---
 
 ## Tech Stack
