@@ -17,23 +17,14 @@ The result is a fully reproducible pipeline that turns raw API data into meaning
 ## 🏁 What This Project Does
 This pipeline takes raw Formula 1 data and transforms it into a queryable analytics warehouse.
 
-The workflow looks like this:
-```bash
-F1 API  
-↓  
-Python Ingestion Service  
-↓  
-PostgreSQL Data Warehouse (raw layer)  
-↓  
-dbt Transformations (staging → marts)  
-↓  
-Analytics Models  
-↓  
-Metabase Dashboards
-```
+<p align="center">
+  <img src="docs/project_workflow.svg" width="50%">
+  <br>
+  <em>Project workflow diagram</em>
+</p>
 The pipeline is fully containerized and runs locally using Docker Compose, making it easy to reproduce the full data stack.
 
-## 📊 Example Analytics
+## 📊 Example Analytics 
 The warehouse powers multiple dashboards built in Metabase.
 
 Examples include:
@@ -97,212 +88,161 @@ You can also monitor the pipeline directly from the CLI dashboard:
 The goal of this project is not only to analyze F1 data but also to demonstrate how a **modern data stack can be built from scratch.**
 
 
-## ⚙️ Tech Stack
 
-This project uses tools commonly found in modern data engineering environments.
+## ⚙️ Tech Stack
 
 | Layer | Tool | Description |
 |------|------|-------------|
-| Containerization | Docker Compose | Orchestrates the entire data stack locally |
-| Data Ingestion | Python | Collects Formula 1 race data from external API |
-| Data Warehouse | PostgreSQL | Stores raw and transformed datasets |
-| Transformations | dbt | Builds structured staging and mart models |
-| Data Modeling | dbt | Fact and dimension tables for analytics |
-| BI / Analytics | Metabase | Interactive dashboards and visualizations |
-| Pipeline Monitoring | Python CLI Dashboard | Real-time pipeline monitoring |
-| Configuration | Environment Variables (.env) | Secure configuration management |
+| Containerization | Docker Compose | Orchestrates the full data platform locally |
+| Data Source | Ergast F1 API | External API providing Formula 1 race data |
+| Data Ingestion | Python | Collects and loads API data into the warehouse |
+| Data Warehouse | PostgreSQL | Central analytical warehouse storing raw and transformed datasets |
+| Transformation & Modeling | dbt | Builds staging models and analytics marts using a layered architecture |
+| Data Quality & Testing | dbt tests | Validates model integrity (`not_null`, `unique`, `relationships`) |
+| Query Language | SQL | Used for analytics modeling and transformations |
+| BI / Analytics | Metabase | Interactive dashboards and data exploration |
+| Pipeline Monitoring | Python CLI Dashboard | Terminal dashboard for monitoring pipeline execution |
+| Configuration | Environment Variables (.env) | Environment-based configuration for credentials and services |
 
 
-## 🏗️ Architecture
 
-The pipeline is organized into three main stages.
+## ⭐️ Key Engineering Features
 
-### 1️⃣ Ingestion
+• **End-to-End Data Pipeline**  
+  Raw Formula 1 data is ingested from an external API, transformed with dbt, and exposed through analytics dashboards.
 
-A Python ingestion pipeline fetches Formula 1 data from the API and loads it into raw PostgreSQL tables.
+• **Containerized Data Stack**  
+  The entire infrastructure runs locally using Docker Compose, ensuring reproducible environments and easy setup.
 
-The ingestion service runs inside a Docker container and writes logs and progress state for monitoring.
-### 2️⃣ Storage
+• **Layered Data Modeling with dbt**  
+  The warehouse follows a structured modeling approach:
+  - **staging models** clean and standardize raw data
+  - **mart models** create analytics-ready fact and dimension tables
 
-PostgreSQL acts as the central warehouse storing both raw ingestion tables and transformed analytics models.
+• **Automated Pipeline Execution and Dependency Handling**  
+  The dbt container waits for ingestion to complete before running transformations, ensuring proper pipeline ordering.
 
-### 3️⃣ Transformation
+• **Environment-Based Configuration**  
+  Database credentials and configuration are managed through environment variables for flexibility and security.
 
-Data is transformed using dbt into two layers:
+• **Interactive Analytics Layer**  
+  Metabase dashboards allow exploration of driver performance, race results, and constructor standings as well as long-term insights into 75 years of rich history.
 
-**Staging models**
-- clean raw API data
-- standardize formats
-- create consistent schemas
-
-**Mart models**
-- fact tables
-- dimension tables
-- analytics-ready datasets
-
-Example dbt configuration:
-- staging models materialized as views
-- marts materialized as tables 
-
-### 4️⃣Analytics
-
-Transformed datasets are exposed through **Metabase dashboards**, allowing interactive exploration of driver, race, and constructor performance.
-
+• **Pipeline Monitoring CLI**  
+  A custom Python CLI dashboard provides visibility into pipeline progress and ingestion status.
 
 ## 🏗️ Data Pipeline Architecture
 
-        +-------------+
-        |   F1 API    |
-        +-------------+
-               |
-               v
-     +-------------------+
-     | Python Ingestion  |
-     +-------------------+
-               |
-               v
-       +---------------+
-       |   PostgreSQL  |
-       |     (Raw)     |
-       +---------------+
-               |
-               v
-        +-------------+
-        |     dbt     |
-        | staging     |
-        | marts       |
-        +-------------+
-               |
-               v
-        +-------------+
-        |  Metabase   |
-        | Dashboards  |
-        +-------------+
-        
+The pipeline is implemented as a containerized data stack orchestrated with Docker Compose.  
+Each stage of the pipeline runs as an isolated service and communicates through the central PostgreSQL data warehouse.
+
+<p align="center">
+  <img src="docs/data_pipeline_architecture.svg" width="100%">
+  <br>
+  <em>Data pipeline architecture diagram</em>
+</p>
+
+The system consists of three core data platform services and an external analytics layer.
+
+### 1️⃣ Ingestion Container (Python)
+
+The ingestion service is responsible for collecting Formula 1 race data from the external F1 API and loading it into the warehouse.
+
+Key responsibilities:
+
+- Fetch race, driver, constructor, and results data from the API
+- Load raw datasets into PostgreSQL ingestion tables
+- Track ingestion progress and execution state
+- Write pipeline logs for monitoring and debugging
+
+The ingestion pipeline includes handling for:
+
+- API pagination
+- rate limits
+- seasonal batch ingestion
+
+This container executes the Python ingestion pipeline and acts as the entry point of the data flow into the warehouse. The ingestion pipeline is designed to be **idempotent**, allowing safe re-execution without creating duplicate records.
+
+
+### 2️⃣ PostgreSQL Container (Data Warehouse)
+
+PostgreSQL serves as the central analytical data warehouse and persistence layer for the pipeline.  
+All services interact with the warehouse, making it the central data hub of the system.
+
+The warehouse is organized using schema-based separation that reflects the layered transformation architecture:
+
+- `public` → raw ingestion tables loaded directly from the API  
+- `staging` → cleaned and standardized transformation layer built by dbt  
+- `analytics` → analytics-ready fact and dimension tables optimized for BI queries
+
+This layered structure allows the pipeline to separate raw data ingestion from transformation logic and analytical modeling, improving maintainability and query performance.
+
+### 3️⃣ dbt Container (Transformation Layer)
+
+Data transformations are performed using **dbt (data build tool)**.
+
+The dbt container runs transformation jobs that convert raw ingestion tables into analytics-ready datasets. The analytics layer follows a **star schema design**, consisting of dimension tables and a central fact table optimized for analytical queries and BI workloads.
+
+The transformation workflow follows a layered modeling approach:
+
+**Staging Layer**
+- Cleans raw API data
+- Standardizes naming conventions
+- Normalizes schema structures
+
+**Mart Layer**
+- Builds fact and dimension tables
+- Creates analytics-ready datasets
+- Optimizes query performance for BI tools
+
+
+**Data Quality & Testing**
+
+Data quality is enforced using built-in dbt tests.
+
+The pipeline validates key integrity constraints including:
+
+- `not_null` checks on primary keys
+- `unique` constraints for dimension identifiers
+- `relationships` tests to ensure referential integrity between fact and dimension tables
+
+These tests run automatically after model builds to verify the integrity of the analytics layer.
+
+
+### 4️⃣ Analytics Layer (Metabase)
+
+The final analytics layer is powered by **Metabase**, which connects directly to the PostgreSQL warehouse. 
+
+Metabase provides interactive dashboards that enable exploration of:
+
+- driver performance
+- constructor standings
+- race results
+- season statistics
+
+Business users can query the analytics mart tables through a visual interface without interacting directly with the underlying database.
 
 ## 🐳 Infrastructure
 
-The entire stack runs locally using **Docker Compose**.
+The entire platform is deployed locally using **Docker Compose**, which orchestrates the runtime services required for the pipeline.
 
-Containers include:
-- PostgreSQL database
-- ingestion pipeline
-- dbt transformation environment
+The stack includes the following containers:
 
-The dbt container waits until ingestion finishes before running transformations.
+- **Ingestion container** – Python data ingestion pipeline  
+- **PostgreSQL container** – analytical data warehouse  
+- **dbt container** – transformation, data modeling and data integrity environment
 
-This ensures the pipeline runs in the correct order:
+Container dependencies ensure the pipeline executes in the correct order. The dbt service waits for the ingestion process to complete before executing transformations.
+This dependency ensures that transformations operate on a fully populated raw data layer.
 
-```bash
-ingestion → dbt staging → dbt marts → dbt tests
-```
----
 
-## Tech Stack
-- **Python** – API ingestion & orchestration
-- **PostgreSQL** – relational warehouse (Dockerized)
-- **Docker & Docker Compose** – local infrastructure
-- **dbt** – transformations, testing, and modeling
-- **SQL** – analytics & data modeling
-- **Public Ergast API** (via `api.jolpi.ca` mirror)
-
----
-
-## Architecture
-
-### Ingestion
-- Python ingestion scripts pull data from the Ergast F1 API
-- Explicit handling of:
-  - API pagination
-  - Rate limits
-  - Seasonal batch ingestion
-- Pipelines are **idempotent** and safe to re-run
-
-### Storage
-- PostgreSQL running locally in Docker
-- Schema-based separation:
-  - `public` → raw ingested tables
-  - `staging` → dbt staging views
-  - `analytics` → analytics-ready marts
-
-### Transformation
-- dbt used to implement a layered transformation approach:
-  - **Raw → Staging → Marts**
-- Data quality enforced via dbt tests
-- Star schema modeled for analytics consumption
-
-### Orchestration
-- Docker Compose orchestrates the full pipeline:
-  - PostgreSQL initializes the warehouse
-  - Ingestion container loads raw data
-  - dbt container builds staging and analytics models
-- dbt execution is automatically triggered after ingestion completes
-
----
-
-## Data Model
-
-### Raw Tables
-- `drivers_raw`
-- `constructors_raw`
-- `races_raw`
-- `results_raw`
-
-### Staging Models (dbt)
-- `stg_drivers`
-- `stg_constructors`
-- `stg_races`
-- `stg_results`
-
-### Analytics Marts
-**Dimensions**
-- `dim_drivers`
-- `dim_constructors`
-- `dim_races`
-
-**Fact**
-- `fact_results`  
-  *(one row per driver per race)*
-
----
-
-## Data Quality & Testing
-- dbt tests implemented for:
-  - `not_null`
-  - `unique`
-  - `relationships` (foreign key integrity)
-- Ensures referential integrity between facts and dimensions
-
----
 
 ## Warehouse Schema
 
 ![Warehouse Schema](docs/lineage.png)
 
----
 
-## Example Analytics
-Example SQL analytics queries are available in `f1_dbt/analyses/`, including:
-- Top drivers by career points
-- Constructor dominance by season
-- Driver win counts
-- Race distribution by country
 
----
-## Architecture Overview
-
-This project demonstrates a production-style, containerized ELT architecture with an automated BI layer, reproducible across environments via Docker Compose.
-
-The stack includes:
-
-- **PostgreSQL** → Data warehouse  
-- **Python ingestion service** → Historical Formula 1 data ingestion  
-- **dbt** → Data transformation and validation  
-- **Metabase** → Business intelligence and dashboards  
-
-All services are executed and coordinated through a single Docker Compose workflow, enabling fully automated and reproducible infrastructure provisioning, data ingestion, transformation, and dashboard restoration.
-
----
 ## How to Run Locally
 
 ### Prerequisites
