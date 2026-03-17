@@ -137,7 +137,7 @@ The pipeline is implemented as a containerized data stack orchestrated with Dock
 Each stage of the pipeline runs as an isolated service and communicates through the central PostgreSQL data warehouse.
 
 <p align="center">
-  <img src="docs/data_pipeline_architecture.svg" width="100%">
+  <img src="docs/data_pipeline_architecture.svg" width="90%">
   <br>
   <em>Data pipeline architecture diagram</em>
 </p>
@@ -259,50 +259,21 @@ Before running the project locally, ensure you have the following installed:
 Execution time depends primarily on API rate limits during ingestion.
 
 Typical runtimes:
-- **Full historical ingestion**: ~25–30 minutes  
+- **Full historical ingestion**: ~15–20 minutes  
   (~28,000 race result records)
 - **dbt transformations & tests**: < 1 minute
+- **Metabase startup**: near-instant once data is ready  
 
 The pipeline is idempotent and safe to re-run. Subsequent runs may complete faster if data already exists.
 
 ### 💾 Local Resource Usage (Approximate)
 
-Docker resources used by the pipeline (measured on a clean run):
-
-#### Docker Images
-
-- **metabase/metabase:latest** → 1.56 GB  
-- **docker-ingestion** → 881 MB  
-- **dbt-postgres (1.9.latest)** → 883 MB  
-- **postgres:18** → 671 MB  
-
-> Total image footprint: ~4.0 GB
-
-#### Persistent Data (Docker Volumes)
-
-- **PostgreSQL warehouse data** → ~103 MB  
-- **Metabase application data** → grows over time (initial seed: ~0 MB)  
-- **Ingestion state volume** → negligible  
-
-> Total persistent warehouse footprint after full ingestion: ~100 MB
-
-#### Runtime Memory Usage (Idle State)
-
-- **Metabase** → ~1.0 GB RAM  
-- **PostgreSQL** → ~80 MB RAM  
-- Other services run briefly during ingestion & transformation.
-
-#### Docker Build Cache
-
-- ~950 MB (can be safely pruned if needed)
-
----
-
-*These resources are typical for a fully containerized local analytics stack and can be completely removed using:*
-
-```bash
-docker compose down -v
-```
+| Component | Usage |
+|----------|------|
+| Docker images | ~5 GB total |
+| PostgreSQL data | ~120 MB after full ingestion |
+| Metabase memory | ~1 GB RAM (idle) |
+| Build cache | ~1 GB (optional, can be pruned) |
 
 ### 1️⃣ Local Environment Setup
 
@@ -313,67 +284,31 @@ docker compose down -v
   cd f1_data_warehouse/
   ```
 
-  Create a local .env file from the example provided. No edits required for local runs.
-
-  ```bash
-  cp .env.example .env
-  ```
 
 ### 2️⃣ Run the Entire Pipeline
   The entire data pipeline is orchestrated through Docker Compose and can be executed with a **single command**.
 
   ```bash
-  cd docker/
-  docker compose --env-file ../.env up --build
+  ./start.sh
   ```
+  This script will:
+  - Build and start all Docker services
+  - Launch the CLI monitoring dashboard
+  - Run the ingestion pipeline
+ - Execute dbt transformations and tests
+  - Open Metabase automatically in your browser
 
-  This command is the **core entry point** of the project. It provisions infrastructure, ingests data, and builds analytics models, starts the BI layer, and restores dashboards - fully automated and end-to-end.
 
-  The system is ready once the terminal displays:
 
-  ```bash
-  🚀 F1 DATA WAREHOUSE IS READY 🚀
-  ```
+This script is the **core entry point** of the project.
 
-Under the hood, it performs the following steps:
+With a single command, it provisions the full data platform, runs the ingestion and transformation pipelines, and launches the analytics layer.
 
-1. **Provision the Warehouse**
-   - Starts a PostgreSQL container
-   - Initializes schemas and persistent storage
-   - Creates the Metabase application database
-
-2. **Ingest Raw Formula 1 Data**
-   - Executes Python ingestion pipelines
-   - Pulls historical data from the Ergast API
-   - Handles pagination, retries, and API rate limits
-   - Loads data into raw tables in the `public` schema
-
-3. **Transform & Validate Data with dbt**
-   - Builds staging models as views (`dbt_staging`)
-   - Builds analytics-ready marts as tables (`dbt_analytics`)
-   - Executes data quality tests:
-     - `not null`
-     - `unique`
-     - `relationships`
-
-4. **Start Metabase (BI Layer)**
-   - Launches Metabase as a containerized service
-   - Connects it automatically to the warehouse
-   - Configues the application database
-
-5. **Automatically Restore Pre-Built Dashboards**
-   - Restores a pre-configured Metabase environment from a version-controlled database seed 
-   - Restores:
-     - F1 Season Performance
-     - F1 Long-Term Insights
-   - Applies all saved filters, formatting and visual styling (no manual dashboard setup required)
-    
-
-Once this step completes successfully, the warehouse and BI layer are **fully analytics-ready**.
+Once completed, the system is fully built and ready for exploration.
 
 ### 3️⃣ Access the Dashboards
 
-Once the pipeline completes, open in a web browser:
+Once the pipeline completes, Metabase will open automatically at:
 
 ```bash
 http://localhost:3000
@@ -459,21 +394,73 @@ No manual setup is required.
   ```
 
 
-## Pipeline Summary
+## 🔮 Future Improvements
 
-This project demonstrates a production-style ELT + BI architecture where:
-- Infrastructure is fully containerized (PostgreSQL, ingestion, dbt, Metabase)
-- Ingestion and transformation are decoupled
-- dbt enforces modeling standards and data quality
-- Analytics marts are built using dimensional modeling principles
-- The BI layer is automatically provisioned and restored
+This project can be extended into a fully cloud-native data platform with production-grade capabilities:
 
-The Metabase container automatically restores a pre-configured BI environment from a version-controlled SQL seed file (metabase_seed.sql), ensuring identical dashboards across environments.
+### ☁️ Cloud Infrastructure (GCP)
 
-Running a single command:
+- Migrate the data warehouse to **BigQuery** for scalable, serverless analytics  
+- Use **Google Cloud Storage (GCS)** as a raw data lake for ingestion staging  
+- Deploy services using **Cloud Run** or **GKE (Kubernetes)**  
+- Manage infrastructure using **Terraform**
 
-```bash
-docker compose --env-file ../.env up --build
-```
+---
 
-provisions infrastructure, ingests historical F1 data, builds analytics models, and launches fully configured dashboards — end-to-end and reproducibly.
+### 🔄 Orchestration & Scheduling
+
+- Introduce **Apache Airflow** for workflow orchestration and scheduling  
+- Implement DAG-based pipeline execution with retry logic and monitoring  
+- Support scheduled incremental ingestion (daily / hourly updates)
+
+---
+
+### ⚡ Advanced Data Modeling
+
+- Implement **incremental dbt models** for efficient updates  
+- Add **snapshot models** to track slowly changing dimensions (SCD Type 2)  
+- Optimize BigQuery models using partitioning and clustering  
+
+---
+
+### 🧪 Data Quality & Observability
+
+- Integrate **Great Expectations** or **dbt tests + exposures** for enhanced validation  
+- Add **data freshness checks** and SLA monitoring  
+- Implement pipeline observability with **OpenTelemetry + logging dashboards**
+
+---
+
+### 🚀 CI/CD & Deployment
+
+- Set up CI/CD pipelines using **GitHub Actions**  
+- Automate dbt runs and tests on pull requests  
+- Enable environment-based deployments (dev / staging / prod)
+
+---
+
+### 🌐 Analytics & Product Layer
+
+- Host dashboards via a custom domain (e.g. deployed Metabase or alternative BI tool)  
+- Build a lightweight frontend for sharing insights publicly  
+- Add role-based access and multi-user support  
+
+---
+
+### 📡 Real-Time & Streaming 
+
+- Introduce streaming ingestion using **Pub/Sub**  
+- Process real-time events with **Dataflow / Apache Beam**  
+- Build near real-time analytics dashboards  
+
+---
+
+### 🧠 Machine Learning & Advanced Analytics
+
+- Add predictive models (e.g. race outcome prediction) using **Vertex AI**  
+- Build feature pipelines on top of the warehouse  
+- Serve ML predictions through APIs or dashboards  
+
+# 👨‍💻 Author
+
+Built by a Data Engineering enthusiast and Formula 1 fan 🏎️💨💨💨
