@@ -3,6 +3,20 @@ set -e
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+open_browser() {
+  URL="http://localhost:3000"
+
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    open "$URL"
+  elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    xdg-open "$URL"
+  elif [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
+    start "$URL"
+  else
+    echo "⚠️ Please open $URL manually in your browser."
+  fi
+}
+
 clear
 echo ""
 echo "🚀 Starting F1 Data Warehouse"
@@ -32,3 +46,11 @@ sleep 1
 
 clear
 python -m cli.pipeline_cli
+
+echo ""
+echo "✅ Pipeline finished successfully!"
+echo "🌐 Opening Metabase dashboard..."
+echo "Metabase available at: http://localhost:3000"
+sleep 1
+
+open_browser
