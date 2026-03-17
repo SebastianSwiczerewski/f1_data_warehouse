@@ -35,6 +35,11 @@ def create_table(cur):
 
 def insert_races(cur, races):
     logger.debug("Inserting races into database")
+
+    for r in races:
+            if not isinstance(r, dict):
+                print("BAD RECORD:", r)
+                
     for r in races:
         cur.execute("""
             INSERT INTO races_raw
