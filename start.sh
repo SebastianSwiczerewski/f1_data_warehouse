@@ -3,39 +3,60 @@ set -e
 
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-echo "🚀 Starting F1 Data Warehouse..."
+open_browser() {
+  URL="http://localhost:3000"
 
+  if [[ "$OSTYPE" == "darwin"* ]]; then
+    open "$URL"
+  elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    xdg-open "$URL"
+  elif [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
+    start "$URL"
+  else
+    echo "⚠️ Please open $URL manually in your browser."
+  fi
+}
+
+clear
+echo ""
+echo "🚀 Starting F1 Data Warehouse"
+echo ""
+
+# .env exists
 if [ ! -f "$PROJECT_DIR/.env" ]; then
   echo "⚠️  .env file not found. Creating from .env.example..."
   cp "$PROJECT_DIR/.env.example" "$PROJECT_DIR/.env"
 fi
 
+echo "Building images..."
 docker compose \
   --env-file "$PROJECT_DIR/.env" \
   -f "$PROJECT_DIR/docker/docker-compose.yml" \
-  up --build
+  build > /dev/null 2>&1
 
-echo "⏳ Waiting for Metabase to become healthy..."
+echo "Starting containers..."
+docker compose \
+  --env-file "$PROJECT_DIR/.env" \
+  -f "$PROJECT_DIR/docker/docker-compose.yml" \
+  up -d > /dev/null 2>&1
 
-until curl -s http://localhost:3000/api/health | grep -q "ok"; do
-  sleep 2
-done
-
-echo ""
-echo "========================================"
-echo "🚀 F1 DATA WAREHOUSE IS READY 🚀"
-echo "Opening: http://localhost:3000"
-echo "========================================"
-echo ""
-
-URL="http://localhost:3000"
-
-if [[ "$OSTYPE" == "darwin"* ]]; then
-  open "$URL"                # macOS
-elif [[ "$OSTYPE" == "linux-gnu"* ]]; then
-  xdg-open "$URL" >/dev/null 2>&1 || true  # Linux
-elif [[ "$OSTYPE" == "msys"* ]] || [[ "$OSTYPE" == "cygwin"* ]]; then
-  start "$URL"               # Git Bash / Windows
-else
-  echo "⚠️  Could not detect OS. Please open $URL manually."
+echo "Checking CLI dependencies..."
+if ! python -c "import rich" &> /dev/null; then
+  echo "📦 Installing CLI dependencies..."
+  pip install -r requirements.txt > /dev/null 2>&1
 fi
+
+echo "Launching dashboard..."
+
+sleep 2
+
+clear
+python -m cli.pipeline_cli
+
+echo ""
+echo "✅ Pipeline finished successfully!"
+echo "🌐 Opening Metabase dashboard..."
+echo "Metabase available at: http://localhost:3000"
+sleep 2
+
+open_browser

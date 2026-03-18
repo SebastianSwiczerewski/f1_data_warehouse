@@ -1,4 +1,4 @@
-from ingestion.db import connect_db
+from config.database import get_db_cursor
 from ingestion.api import fetch_paginated
 from ingestion.logger import setup_logger
 
@@ -35,6 +35,11 @@ def create_table(cur):
 
 def insert_races(cur, races):
     logger.debug("Inserting races into database")
+
+    for r in races:
+            if not isinstance(r, dict):
+                print("BAD RECORD:", r)
+                
     for r in races:
         cur.execute("""
             INSERT INTO races_raw
@@ -58,8 +63,7 @@ def insert_races(cur, races):
 def main():
     logger.info("Starting races ingestion")
 
-    conn = connect_db()
-    cur = conn.cursor()
+    conn, cur = get_db_cursor()
 
     try:
         races = fetch_all_races()

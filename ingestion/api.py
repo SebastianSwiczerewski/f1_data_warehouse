@@ -62,8 +62,16 @@ def fetch_paginated(endpoint: str, data_path: list):
         data = response.json()
         batch = data
 
+    
         for key in data_path:
-            batch = batch[key]
+            if isinstance(batch, dict):
+                batch = batch.get(key)
+            else:
+                batch = None
+                break
+
+        if not isinstance(batch, list):
+            raise ValueError(f"Unexpected API structure at {endpoint}: {batch}")
 
         if not batch:
             break
