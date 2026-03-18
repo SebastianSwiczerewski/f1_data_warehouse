@@ -40,9 +40,15 @@ docker compose \
   -f "$PROJECT_DIR/docker/docker-compose.yml" \
   up -d > /dev/null 2>&1
 
+echo "Checking CLI dependencies..."
+if ! python -c "import rich" &> /dev/null; then
+  echo "📦 Installing CLI dependencies..."
+  pip install -r requirements.txt > /dev/null 2>&1
+fi
+
 echo "Launching dashboard..."
 
-sleep 1
+sleep 2
 
 clear
 python -m cli.pipeline_cli
@@ -51,6 +57,6 @@ echo ""
 echo "✅ Pipeline finished successfully!"
 echo "🌐 Opening Metabase dashboard..."
 echo "Metabase available at: http://localhost:3000"
-sleep 1
+sleep 2
 
 open_browser
